@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Scheduler Enterprise</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="stylesheet" th:href="@{/css/main.css}"/>
+</head>
+<body>
+<header class="topbar">
+    <div class="topbar__inner">
+        <h1 class="brand">Scheduler Enterprise</h1>
+        <div class="brand__sub">调度面板 · 规则/任务/手动执行</div>
+    </div>
+</header>
+
+<main class="container">
+    <!-- 上：Schedules / Manual Run -->
+    <section class="grid-2">
+        <!-- Schedules -->
+        <div class="card">
+            <div class="card__header"><h2>Schedules</h2></div>
+            <div class="card__body">
+                <form class="form" method="post" action="/schedules">
+                    <div class="form__row">
+                        <label for="sch-type">Type</label>
+                        <input id="sch-type" name="type" placeholder="code.index" required>
+                    </div>
+                    <div class="form__row">
+                        <label for="sch-cron">Cron</label>
+                        <input id="sch-cron" name="cron" placeholder="0 */1 * * * *" required>
+                    </div>
+                    <div class="form__row">
+                        <label for="sch-payload">Payload (JSON)</label>
+                        <input id="sch-payload" name="payload" placeholder='{"root":"D:/src","out":"D:/report"}'>
+                    </div>
+                    <div class="form__row form__row--inline">
+                        <label class="checkbox">
+                            <input type="checkbox" name="enabled" value="true" checked>
+                            <span>Enabled</span>
+                        </label>
+                        <button type="submit" class="btn btn--primary">Create</button>
+                    </div>
+                </form>
+
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Type</th>
+                            <th>Cron</th>
+                            <th>Enabled</th>
+                            <th>Last Fire</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="s : ${schedules}">
+                            <td th:text="${s.id}"></td>
+                            <td th:text="${s.type}"></td>
+                            <td><code class="code" th:text="${s.cron}"></code></td>
+                            <td>
+                <span class="badge"
+                      th:classappend="${s.enabled} ? ' badge--ok' : ' badge--muted'"
+                      th:text="${s.enabled} ? 'ON' : 'OFF'"></span>
+                            </td>
+                            <td th:text="${s.lastFireAt}"></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Run -->
+        <div class="card">
+            <div class="card__header"><h2>Manual Run (no DB)</h2></div>
+            <div class="card__body">
+                <form class="form" method="post" action="/manual/run">
+                    <div class="form__row">
+                        <label for="mr-type">Type</label>
+                        <select id="mr-type" name="type">
+                            <option th:each="r : ${runners}" th:value="${r.type()}" th:text="${r.type()}"></option>
+                        </select>
+                    </div>
+                    <div class="form__row">
+                        <label for="mr-payload">Payload (JSON)</label>
+                        <input id="mr-payload" name="payload" th:value="${lastPayload}"
+                               placeholder='{"root":"D:/src","out":"D:/report"}'>
+                    </div>
+                    <div class="form__row form__row--inline">
+                        <button type="submit" class="btn btn--secondary">Run Now</button>
+                        <div class="tip">不入库，直接执行 Runner。</div>
+                    </div>
+                </form>
+
+                <div class="alert" th:if="${ok != null}">
+                    <div class="alert__title">
+                        <span th:if="${ok}" class="badge badge--ok">SUCCEED</span>
+                        <span th:if="${!ok}" class="badge badge--error">FAILED</span>
+                        <span class="muted">Type:</span> <b th:text="${lastType}"></b>
+                        <span class="muted">· Cost:</span> <b th:text="${costMs}"></b> ms
+                    </div>
+                    <pre class="log" th:if="${error != null}" th:text="${error}"></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 下：Enqueue / Tasks -->
+    <section class="grid-2">
+        <!-- Enqueue -->
+        <div class="card">
+            <div class="card__header"><h2>Enqueue Task</h2></div>
+            <div class="card__body">
+                <form class="form" method="post" action="/tasks/enqueue">
+                    <div class="form__row">
+                        <label for="enq-type">Type</label>
+                        <input id="enq-type" name="type" placeholder="code.index" required>
+                    </div>
+                    <div class="form__row">
+                        <label for="enq-payload">Payload (JSON)</label>
+                        <input id="enq-payload" name="payload" placeholder='{"root":"D:/src","out":"D:/report"}'>
+                    </div>
+                    <div class="form__row form__row--inline">
+                        <button type="submit" class="btn btn--neutral">Enqueue</button>
+                        <div class="tip">写入一条 <code class="code">PENDING</code> 任务，等待引擎领取。</div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Tasks -->
+        <div class="card">
+            <div class="card__header"><h2>Tasks</h2></div>
+            <div class="card__body">
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Updated</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="t : ${tasks}">
+                            <td th:text="${t.id}"></td>
+                            <td th:text="${t.type}"></td>
+                            <td>
+                <span class="badge"
+                      th:classappend="
+                        ${t.status}=='PENDING' ? ' badge--muted' :
+                        (${t.status}=='RUNNING' ? ' badge--warn' :
+                        (${t.status}=='SUCCEED' ? ' badge--ok' : ' badge--error'))"
+                      th:text="${t.status}"></span>
+                            </td>
+                            <td th:text="${t.createdAt}"></td>
+                            <td th:text="${t.updatedAt}"></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="tip" style="margin-top:8px">提示：状态变化取决于调度频率与任务执行时长。</div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<footer class="footer">
+    <div class="footer__inner">
+        <span class="muted">© Scheduler Enterprise</span>
+    </div>
+</footer>
+</body>
+</html>
